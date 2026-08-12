@@ -15,4 +15,20 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt5 REQUIRED COMPONENTS Widgets Sql)
 
+include(CTest)
+
+set(BOOST_ROOT "" CACHE PATH "Path to the extracted Boost directory")
+
+if(BUILD_TESTING)
+    if(NOT EXISTS "${BOOST_ROOT}/boost/test/included/unit_test.hpp")
+        message(FATAL_ERROR
+            "Boost headers were not found. Set BOOST_ROOT to the extracted Boost directory."
+        )
+    endif()
+endif()
+
 add_subdirectory(src)
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
