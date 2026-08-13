@@ -1,21 +1,253 @@
 #include "ui/MainWindow.h"
 
+#include "ui/CartTableModel.h"
+#include "ui/MoneyFormatter.h"
+#include "ui/ProductTableModel.h"
+
+#include <QAbstractItemView>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QLabel>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QSpinBox>
+#include <QTableView>
 #include <QVBoxLayout>
 #include <QWidget>
 
-MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
+MainWindow::MainWindow(
+    const pos::ProductCatalog& catalog,
+    pos::Sale& sale,
+    QWidget* parent)
+    : QMainWindow(parent),
+      catalog_(catalog),
+      sale_(sale)
+{
+    productModel_ = new ProductTableModel(catalog_, this);
+    cartModel_ = new CartTableModel(sale_, this);
+
+    buildUi();
+    connectSignals();
+    updateTotal();
+}
+
+void MainWindow::buildUi()
 {
     setWindowTitle(tr("Mini POS"));
-    resize(1000, 650);
+    resize(1100, 650);
 
     auto* centralWidget = new QWidget(this);
-    auto* layout = new QVBoxLayout(centralWidget);
-    auto* title = new QLabel(tr("Кассовый модуль"), centralWidget);
+    auto* mainLayout = new QHBoxLayout(centralWidget);
 
-    title->setAlignment(Qt::AlignCenter);
+    auto* catalogLayout = new QVBoxLayout;
+    auto* cartLayout = new QVBoxLayout;
 
-    layout->addWidget(title);
+    auto* catalogTitle = new QLabel(
+        tr("Каталог товаров"),
+        centralWidget);
+
+    productTable_ = new QTableView(centralWidget);
+    productTable_->setModel(productModel_);
+    productTable_->setSelectionBehavior(
+        QAbstractItemView::SelectRows);
+    productTable_->setSelectionMode(
+        QAbstractItemView::SingleSelection);
+    productTable_->setEditTriggers(
+        QAbstractItemView::NoEditTriggers);
+    productTable_->horizontalHeader()
+        ->setStretchLastSection(true);
+
+    auto* addControlsLayout = new QHBoxLayout;
+
+    addQuantitySpinBox_ = new QSpinBox(centralWidget);
+    addQuantitySpinBox_->setRange(1, 99);
+    addQuantitySpinBox_->setValue(1);
+    addQuantitySpinBox_->setPrefix(tr("Количество: "));
+
+    addButton_ = new QPushButton(
+        tr("Добавить в чек"),
+        centralWidget);
+
+    addControlsLayout->addWidget(addQuantitySpinBox_);
+    addControlsLayout->addWidget(addButton_);
+
+    catalogLayout->addWidget(catalogTitle);
+    catalogLayout->addWidget(productTable_);
+    catalogLayout->addLayout(addControlsLayout);
+
+    auto* cartTitle = new QLabel(
+        tr("Текущий чек"),
+        centralWidget);
+
+    cartTable_ = new QTableView(centralWidget);
+    cartTable_->setModel(cartModel_);
+    cartTable_->setSelectionBehavior(
+        QAbstractItemView::SelectRows);
+    cartTable_->setSelectionMode(
+        QAbstractItemView::SingleSelection);
+    cartTable_->setEditTriggers(
+        QAbstractItemView::NoEditTriggers);
+    cartTable_->horizontalHeader()
+        ->setStretchLastSection(true);
+
+    auto* cartControlsLayout = new QHBoxLayout;
+
+    cartQuantitySpinBox_ = new QSpinBox(centralWidget);
+    cartQuantitySpinBox_->setRange(1, 99);
+    cartQuantitySpinBox_->setValue(1);
+
+    changeQuantityButton_ = new QPushButton(
+        tr("Изменить количество"),
+        centralWidget);
+
+    removeButton_ = new QPushButton(
+        tr("Удалить"),
+        centralWidget);
+
+    cartControlsLayout->addWidget(cartQuantitySpinBox_);
+    cartControlsLayout->addWidget(changeQuantityButton_);
+    cartControlsLayout->addWidget(removeButton_);
+
+    totalLabel_ = new QLabel(centralWidget);
+
+    QFont totalFont = totalLabel_->font();
+    totalFont.setPointSize(16);
+    totalFont.setBold(true);
+    totalLabel_->setFont(totalFont);
+    totalLabel_->setAlignment(Qt::AlignRight);
+
+    cartLayout->addWidget(cartTitle);
+    cartLayout->addWidget(cartTable_);
+    cartLayout->addLayout(cartControlsLayout);
+    cartLayout->addWidget(totalLabel_);
+
+    mainLayout->addLayout(catalogLayout, 1);
+    mainLayout->addLayout(cartLayout, 2);
+
     setCentralWidget(centralWidget);
+}
+
+void MainWindow::connectSignals()
+{
+    connect(
+        addButton_,
+        &QPushButton::clicked,
+        this,
+        &MainWindow::addSelectedProduct);
+
+    connect(
+        productTable_,
+        &QTableView::doubleClicked,
+        this,
+        [this](const QModelIndex&)
+        {
+            addSelectedProduct();
+        });
+
+    connect(
+        removeButton_,
+        &QPushButton::clicked,
+        this,
+        &MainWindow::removeSelectedItem);
+
+    connect(
+        changeQuantityButton_,
+        &QPushButton::clicked,
+        this,
+        &MainWindow::changeSelectedQuantity);
+
+    connect(
+        cartTable_->selectionModel(),
+        &QItemSelectionModel::currentRowChanged,
+        this,
+        [this](
+            const QModelIndex& current,
+            const QModelIndex&)
+        {
+            const int quantity =
+                cartModel_->quantityAt(current.row());
+
+            if (quantity > 0)
+            {
+                cartQuantitySpinBox_->setValue(quantity);
+            }
+        });
+}
+
+void MainWindow::addSelectedProduct()
+{
+    const QModelIndex index = productTable_->currentIndex();
+
+    const pos::Product* product =
+        productModel_->productAt(index.row());
+
+    if (product == nullptr)
+    {
+        QMessageBox::information(
+            this,
+            tr("Товар не выбран"),
+            tr("Выберите товар из каталога."));
+        return;
+    }
+
+    sale_.addProduct(
+        *product,
+        addQuantitySpinBox_->value());
+
+    cartModel_->refresh();
+    updateTotal();
+}
+
+void MainWindow::removeSelectedItem()
+{
+    const QModelIndex index = cartTable_->currentIndex();
+
+    const pos::ProductId productId =
+        cartModel_->productIdAt(index.row());
+
+    if (productId == 0)
+    {
+        QMessageBox::information(
+            this,
+            tr("Позиция не выбрана"),
+            tr("Выберите позицию в чеке."));
+        return;
+    }
+
+    sale_.removeProduct(productId);
+
+    cartModel_->refresh();
+    updateTotal();
+}
+
+void MainWindow::changeSelectedQuantity()
+{
+    const QModelIndex index = cartTable_->currentIndex();
+
+    const pos::ProductId productId =
+        cartModel_->productIdAt(index.row());
+
+    if (productId == 0)
+    {
+        QMessageBox::information(
+            this,
+            tr("Позиция не выбрана"),
+            tr("Выберите позицию в чеке."));
+        return;
+    }
+
+    sale_.setQuantity(
+        productId,
+        cartQuantitySpinBox_->value());
+
+    cartModel_->refresh();
+    updateTotal();
+}
+
+void MainWindow::updateTotal()
+{
+    totalLabel_->setText(
+        tr("Итого: %1")
+            .arg(pos::ui::formatMoney(sale_.total())));
 }

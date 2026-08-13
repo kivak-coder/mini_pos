@@ -2,6 +2,8 @@ add_library(mini_pos_domain
     domain/Money.h
     domain/Product.h
     domain/Product.cpp
+    domain/ProductCatalog.h
+    domain/ProductCatalog.cpp
     domain/CartItem.h
     domain/CartItem.cpp
     domain/Sale.h
@@ -15,10 +17,18 @@ target_include_directories(mini_pos_domain
 
 add_executable(mini_pos
     main.cpp
+
+    infrastructure/ProductCatalogDemo.h
+    infrastructure/ProductCatalogDemo.cpp
+
+    ui/MoneyFormatter.h
+    ui/MoneyFormatter.cpp
+    ui/ProductTableModel.h
+    ui/ProductTableModel.cpp
+    ui/CartTableModel.h
+    ui/CartTableModel.cpp
     ui/MainWindow.h
     ui/MainWindow.cpp
-    domain/CartItem.cpp
-    domain/Sale.cpp
 )
 
 target_link_libraries(mini_pos
