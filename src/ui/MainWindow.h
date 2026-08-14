@@ -2,6 +2,7 @@
 
 #include "domain/ProductCatalog.h"
 #include "domain/Sale.h"
+#include "application/CashPaymentService.h"
 
 #include <QMainWindow>
 
@@ -30,6 +31,7 @@ private:
     void removeSelectedItem();
     void changeSelectedQuantity();
     void updateTotal();
+    void payCurrentSale();
 
     const pos::ProductCatalog& catalog_;
     pos::Sale& sale_;
@@ -48,4 +50,7 @@ private:
     QPushButton* changeQuantityButton_ = nullptr;
 
     QLabel* totalLabel_ = nullptr;
+    pos::application::CashPaymentService paymentService_;
+
+    QPushButton* paymentButton_ = nullptr;
 };

@@ -9,12 +9,39 @@ add_library(mini_pos_domain
     domain/Sale.h
     domain/Sale.cpp
     application/CashPaymentService.h
+    application/CashPaymentService.cpp
+
 )
 
 target_include_directories(mini_pos_domain
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+add_library(mini_pos_application
+    application/CashPaymentService.h
+    application/CashPaymentService.cpp
+)
+
+target_include_directories(mini_pos_application
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(mini_pos_application
+    PUBLIC
+        mini_pos_domain
+)
+
+if(MINGW)
+    target_compile_options(mini_pos_application PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+    )
+
+endif()
+
 
 add_executable(mini_pos
     main.cpp
@@ -60,26 +87,3 @@ if(MINGW)
     )
 endif()
 
-add_library(mini_pos_application
-    application/CashPaymentService.h
-    application/CashPaymentService.cpp
-)
-
-target_include_directories(mini_pos_application
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(mini_pos_application
-    PUBLIC
-        mini_pos_domain
-)
-
-if(MINGW)
-    target_compile_options(mini_pos_application PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-    )
-
-endif()

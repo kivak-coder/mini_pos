@@ -21,7 +21,7 @@ CashPaymentResult CashPaymentService::evaluate(const Sale& sale, Money received)
         result.status = PaymentStatus::InsufficientFunds;
         return result;
     }
-    result.change = result.total - result.received;
+    result.change = result.received - result.total;
     result.status = PaymentStatus::Success;
     return result;
 }

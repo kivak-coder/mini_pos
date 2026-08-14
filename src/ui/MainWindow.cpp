@@ -3,6 +3,7 @@
 #include "ui/CartTableModel.h"
 #include "ui/MoneyFormatter.h"
 #include "ui/ProductTableModel.h"
+#include "ui/PaymentDialog.h"
 
 #include <QAbstractItemView>
 #include <QHBoxLayout>
@@ -110,6 +111,11 @@ void MainWindow::buildUi()
     cartControlsLayout->addWidget(removeButton_);
 
     totalLabel_ = new QLabel(centralWidget);
+    paymentButton_ = new QPushButton(
+    tr("Оплатить наличными"),
+    centralWidget);
+
+    paymentButton_->setMinimumHeight(42);
 
     QFont totalFont = totalLabel_->font();
     totalFont.setPointSize(16);
@@ -121,6 +127,7 @@ void MainWindow::buildUi()
     cartLayout->addWidget(cartTable_);
     cartLayout->addLayout(cartControlsLayout);
     cartLayout->addWidget(totalLabel_);
+    cartLayout->addWidget(paymentButton_);
 
     mainLayout->addLayout(catalogLayout, 1);
     mainLayout->addLayout(cartLayout, 2);
@@ -173,6 +180,12 @@ void MainWindow::connectSignals()
                 cartQuantitySpinBox_->setValue(quantity);
             }
         });
+
+    connect(
+    paymentButton_,
+    &QPushButton::clicked,
+    this,
+    &MainWindow::payCurrentSale);
 }
 
 void MainWindow::addSelectedProduct()
@@ -250,4 +263,50 @@ void MainWindow::updateTotal()
     totalLabel_->setText(
         tr("Итого: %1")
             .arg(pos::ui::formatMoney(sale_.total())));
+}
+
+void MainWindow::payCurrentSale()
+{
+    if (sale_.empty())
+    {
+        QMessageBox::information(
+            this,
+            tr("Пустой чек"),
+            tr("Добавьте хотя бы один товар."));
+        return;
+    }
+
+    PaymentDialog dialog(
+        sale_,
+        paymentService_,
+        this);
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    const auto result = dialog.result();
+
+    QMessageBox::information(
+        this,
+        tr("Оплата принята"),
+        tr(
+            "Продажа успешно завершена.\n"
+            "Сумма: %1\n"
+            "Получено: %2\n"
+            "Сдача: %3")
+            .arg(pos::ui::formatMoney(result.total))
+            .arg(pos::ui::formatMoney(result.received))
+            .arg(pos::ui::formatMoney(result.change)));
+
+    sale_.clear();
+
+    cartModel_->refresh();
+    cartTable_->clearSelection();
+
+    cartQuantitySpinBox_->setValue(1);
+    addQuantitySpinBox_->setValue(1);
+
+    updateTotal();
 }
