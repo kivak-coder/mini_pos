@@ -8,8 +8,8 @@ add_library(mini_pos_domain
     domain/CartItem.cpp
     domain/Sale.h
     domain/Sale.cpp
-    application/CashPaymentService.h
-    application/CashPaymentService.cpp
+    domain/Receipt.h
+    domain/Receipt.cpp
 
 )
 
@@ -21,6 +21,9 @@ target_include_directories(mini_pos_domain
 add_library(mini_pos_application
     application/CashPaymentService.h
     application/CashPaymentService.cpp
+    application/ReceiptRepository.h
+    application/CheckoutService.h
+    application/CheckoutService.cpp
 )
 
 target_include_directories(mini_pos_application
@@ -48,6 +51,7 @@ add_executable(mini_pos
 
     infrastructure/ProductCatalogDemo.h
     infrastructure/ProductCatalogDemo.cpp
+    infrastructure/SqliteDatabase.h
 
     ui/MoneyFormatter.h
     ui/MoneyFormatter.cpp
@@ -59,6 +63,9 @@ add_executable(mini_pos
     ui/MainWindow.cpp
     ui/PaymentDialog.h
     ui/PaymentDialog.cpp
+    infrastructure/SqliteDatabase.cpp
+    infrastructure/SqliteReceiptRepository.h
+    infrastructure/SqliteReceiptRepository.cpp
 )
 
 target_link_libraries(mini_pos

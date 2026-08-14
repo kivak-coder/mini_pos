@@ -1,0 +1,1 @@
+#include "infrastructure/SqliteReceiptRepository.h"
