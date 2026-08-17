@@ -23,6 +23,7 @@ add_library(mini_pos_application
     application/ReceiptRepository.h
     application/CheckoutService.h
     application/CheckoutService.cpp
+    application/ReceiptReader.h
 )
 
 target_include_directories(mini_pos_application
@@ -80,6 +81,10 @@ add_executable(mini_pos
     ui/MainWindow.cpp
     ui/PaymentDialog.h
     ui/PaymentDialog.cpp
+    ui/ReceiptHistoryTableModel.h
+    ui/ReceiptHistoryTableModel.cpp
+    ui/ReceiptHistoryDialog.h
+    ui/ReceiptHistoryDialog.cpp
 
 )
 
