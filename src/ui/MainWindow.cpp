@@ -4,6 +4,7 @@
 #include "ui/MoneyFormatter.h"
 #include "ui/ProductTableModel.h"
 #include "ui/PaymentDialog.h"
+#include "ui/ReceiptHistoryDialog.h"
 #include "application/CheckoutService.h"
 
 
@@ -19,19 +20,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-MainWindow::MainWindow(
-    const pos::ProductCatalog& catalog,
-    pos::Sale& sale,
-    pos::application::ReceiptRepository&
-        receiptRepository,
-    QWidget* parent)
-    : QMainWindow(parent),
-      catalog_(catalog),
-      sale_(sale),
-      paymentService_(),
-      checkoutService_(
-          paymentService_,
-          receiptRepository)
+MainWindow::MainWindow(const pos::ProductCatalog& catalog, pos::Sale& sale, pos::application::ReceiptRepository&receiptRepository, 
+    const pos::application::ReceiptReader& receiptReader, QWidget* parent)
+    : QMainWindow(parent), catalog_(catalog), sale_(sale), receiptReader_(receiptReader), paymentService_(), checkoutService_(paymentService_, receiptRepository)
 {
     productModel_ = new ProductTableModel(catalog_, this);
     cartModel_ = new CartTableModel(sale_, this);
@@ -52,31 +43,24 @@ void MainWindow::buildUi()
     auto* catalogLayout = new QVBoxLayout;
     auto* cartLayout = new QVBoxLayout;
 
-    auto* catalogTitle = new QLabel(
-        tr("Каталог товаров"),
-        centralWidget);
-
+    auto* catalogTitle = new QLabel(tr("Каталог товаров"), centralWidget);
+    
     productTable_ = new QTableView(centralWidget);
     productTable_->setModel(productModel_);
-    productTable_->setSelectionBehavior(
-        QAbstractItemView::SelectRows);
-    productTable_->setSelectionMode(
-        QAbstractItemView::SingleSelection);
-    productTable_->setEditTriggers(
-        QAbstractItemView::NoEditTriggers);
-    productTable_->horizontalHeader()
-        ->setStretchLastSection(true);
-
+    productTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    productTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    productTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    productTable_->horizontalHeader()->setStretchLastSection(true);
+    
     auto* addControlsLayout = new QHBoxLayout;
-
+    
     addQuantitySpinBox_ = new QSpinBox(centralWidget);
     addQuantitySpinBox_->setRange(1, 99);
     addQuantitySpinBox_->setValue(1);
     addQuantitySpinBox_->setPrefix(tr("Количество: "));
-
-    addButton_ = new QPushButton(
-        tr("Добавить в чек"),
-        centralWidget);
+    
+    addButton_ = new QPushButton(tr("Добавить в чек"), centralWidget);
+    historyButton = new QPushButton(tr("История чеков"), this);
 
     addControlsLayout->addWidget(addQuantitySpinBox_);
     addControlsLayout->addWidget(addButton_);
@@ -85,20 +69,14 @@ void MainWindow::buildUi()
     catalogLayout->addWidget(productTable_);
     catalogLayout->addLayout(addControlsLayout);
 
-    auto* cartTitle = new QLabel(
-        tr("Текущий чек"),
-        centralWidget);
+    auto* cartTitle = new QLabel(tr("Текущий чек"), centralWidget);
 
     cartTable_ = new QTableView(centralWidget);
     cartTable_->setModel(cartModel_);
-    cartTable_->setSelectionBehavior(
-        QAbstractItemView::SelectRows);
-    cartTable_->setSelectionMode(
-        QAbstractItemView::SingleSelection);
-    cartTable_->setEditTriggers(
-        QAbstractItemView::NoEditTriggers);
-    cartTable_->horizontalHeader()
-        ->setStretchLastSection(true);
+    cartTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    cartTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    cartTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    cartTable_->horizontalHeader()->setStretchLastSection(true);
 
     auto* cartControlsLayout = new QHBoxLayout;
 
@@ -106,22 +84,16 @@ void MainWindow::buildUi()
     cartQuantitySpinBox_->setRange(1, 99);
     cartQuantitySpinBox_->setValue(1);
 
-    changeQuantityButton_ = new QPushButton(
-        tr("Изменить количество"),
-        centralWidget);
+    changeQuantityButton_ = new QPushButton(tr("Изменить количество"), centralWidget);
 
-    removeButton_ = new QPushButton(
-        tr("Удалить"),
-        centralWidget);
+    removeButton_ = new QPushButton(tr("Удалить"), centralWidget);
 
     cartControlsLayout->addWidget(cartQuantitySpinBox_);
     cartControlsLayout->addWidget(changeQuantityButton_);
     cartControlsLayout->addWidget(removeButton_);
 
     totalLabel_ = new QLabel(centralWidget);
-    paymentButton_ = new QPushButton(
-    tr("Оплатить наличными"),
-    centralWidget);
+    paymentButton_ = new QPushButton(tr("Оплатить наличными"), centralWidget);
 
     paymentButton_->setMinimumHeight(42);
 
@@ -145,43 +117,23 @@ void MainWindow::buildUi()
 
 void MainWindow::connectSignals()
 {
-    connect(
-        addButton_,
-        &QPushButton::clicked,
-        this,
-        &MainWindow::addSelectedProduct);
+    connect(addButton_, &QPushButton::clicked, this, &MainWindow::addSelectedProduct);
 
-    connect(
-        productTable_,
-        &QTableView::doubleClicked,
-        this,
+    connect(productTable_, &QTableView::doubleClicked, this,
         [this](const QModelIndex&)
         {
             addSelectedProduct();
         });
 
-    connect(
-        removeButton_,
-        &QPushButton::clicked,
-        this,
-        &MainWindow::removeSelectedItem);
+    connect(removeButton_, &QPushButton::clicked, this, &MainWindow::removeSelectedItem);
 
-    connect(
-        changeQuantityButton_,
-        &QPushButton::clicked,
-        this,
-        &MainWindow::changeSelectedQuantity);
+    connect(changeQuantityButton_, &QPushButton::clicked, this, &MainWindow::changeSelectedQuantity);
 
-    connect(
-        cartTable_->selectionModel(),
-        &QItemSelectionModel::currentRowChanged,
-        this,
+    connect(cartTable_->selectionModel(), &QItemSelectionModel::currentRowChanged, this,
         [this](
-            const QModelIndex& current,
-            const QModelIndex&)
+            const QModelIndex& current, const QModelIndex&)
         {
-            const int quantity =
-                cartModel_->quantityAt(current.row());
+            const int quantity = cartModel_->quantityAt(current.row());
 
             if (quantity > 0)
             {
@@ -189,32 +141,28 @@ void MainWindow::connectSignals()
             }
         });
 
-    connect(
-    paymentButton_,
-    &QPushButton::clicked,
-    this,
-    &MainWindow::payCurrentSale);
+    connect(paymentButton_, &QPushButton::clicked, this, &MainWindow::payCurrentSale);
+
+    connect(historyButton, &QPushButton::clicked, this,
+    [this] {
+        pos::ui::ReceiptHistoryDialog dialog(receiptReader_, this);
+        dialog.exec();
+    });
 }
 
 void MainWindow::addSelectedProduct()
 {
     const QModelIndex index = productTable_->currentIndex();
 
-    const pos::Product* product =
-        productModel_->productAt(index.row());
+    const pos::Product* product = productModel_->productAt(index.row());
 
     if (product == nullptr)
     {
-        QMessageBox::information(
-            this,
-            tr("Товар не выбран"),
-            tr("Выберите товар из каталога."));
+        QMessageBox::information(this, tr("Товар не выбран"), tr("Выберите товар из каталога."));
         return;
     }
 
-    sale_.addProduct(
-        *product,
-        addQuantitySpinBox_->value());
+    sale_.addProduct(*product, addQuantitySpinBox_->value());
 
     cartModel_->refresh();
     updateTotal();
@@ -224,15 +172,11 @@ void MainWindow::removeSelectedItem()
 {
     const QModelIndex index = cartTable_->currentIndex();
 
-    const pos::ProductId productId =
-        cartModel_->productIdAt(index.row());
+    const pos::ProductId productId = cartModel_->productIdAt(index.row());
 
     if (productId == 0)
     {
-        QMessageBox::information(
-            this,
-            tr("Позиция не выбрана"),
-            tr("Выберите позицию в чеке."));
+        QMessageBox::information(this, tr("Позиция не выбрана"), tr("Выберите позицию в чеке."));
         return;
     }
 
@@ -246,21 +190,15 @@ void MainWindow::changeSelectedQuantity()
 {
     const QModelIndex index = cartTable_->currentIndex();
 
-    const pos::ProductId productId =
-        cartModel_->productIdAt(index.row());
+    const pos::ProductId productId = cartModel_->productIdAt(index.row());
 
     if (productId == 0)
     {
-        QMessageBox::information(
-            this,
-            tr("Позиция не выбрана"),
-            tr("Выберите позицию в чеке."));
+        QMessageBox::information(this, tr("Позиция не выбрана"), tr("Выберите позицию в чеке."));
         return;
     }
 
-    sale_.setQuantity(
-        productId,
-        cartQuantitySpinBox_->value());
+    sale_.setQuantity(productId, cartQuantitySpinBox_->value());
 
     cartModel_->refresh();
     updateTotal();
@@ -268,26 +206,18 @@ void MainWindow::changeSelectedQuantity()
 
 void MainWindow::updateTotal()
 {
-    totalLabel_->setText(
-        tr("Итого: %1")
-            .arg(pos::ui::formatMoney(sale_.total())));
+    totalLabel_->setText(tr("Итого: %1").arg(pos::ui::formatMoney(sale_.total())));
 }
 
 void MainWindow::payCurrentSale()
 {
     if (sale_.empty())
     {
-        QMessageBox::information(
-            this,
-            tr("Пустой чек"),
-            tr("Добавьте хотя бы один товар."));
+        QMessageBox::information(this, tr("Пустой чек"), tr("Добавьте хотя бы один товар."));
         return;
     }
 
-    PaymentDialog dialog(
-        sale_,
-        paymentService_,
-        this);
+    PaymentDialog dialog(sale_, paymentService_, this);
 
     if (dialog.exec() != QDialog::Accepted)
     {
@@ -296,10 +226,7 @@ void MainWindow::payCurrentSale()
 
     const auto result = dialog.result();
 
-    QMessageBox::information(
-        this,
-        tr("Оплата принята"),
-        tr(
+    QMessageBox::information(this, tr("Оплата принята"), tr(
             "Продажа успешно завершена.\n"
             "Сумма: %1\n"
             "Получено: %2\n"
@@ -310,23 +237,15 @@ void MainWindow::payCurrentSale()
 
     try
     {
-        const auto checkout =
-            checkoutService_.complete(
-                sale_,
-                dialog.result().received);
+        const auto checkout = checkoutService_.complete(sale_, dialog.result().received);
 
         if (!checkout.successful())
         {
-            QMessageBox::warning(
-                this,
-                tr("Оплата не завершена"),
-                tr("Не удалось завершить продажу."));
+            QMessageBox::warning(this, tr("Оплата не завершена"), tr("Не удалось завершить продажу."));
             return;
         }
 
-        QMessageBox::information(
-            this,
-            tr("Оплата принята"),
+        QMessageBox::information(this, tr("Оплата принята"),
             tr(
                 "Чек №%1 успешно сохранён.\n"
                 "Сумма: %2\n"
@@ -357,11 +276,4 @@ void MainWindow::payCurrentSale()
                 .arg(QString::fromUtf8(error.what())));
     }
                 
-    // cartModel_->refresh();
-    // cartTable_->clearSelection();
-
-    // cartQuantitySpinBox_->setValue(1);
-    // addQuantitySpinBox_->setValue(1);
-
-    // updateTotal();
 }

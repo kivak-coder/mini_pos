@@ -15,46 +15,30 @@ int main(int argc, char* argv[])
 {
     QApplication application(argc, argv);
 
-    QCoreApplication::setOrganizationName(
-        QStringLiteral("MiniPosDatabase"));
+    QCoreApplication::setOrganizationName(QStringLiteral("MiniPosDatabase"));
 
-    QCoreApplication::setApplicationName(
-        QStringLiteral("MiniPOS"));
+    QCoreApplication::setApplicationName(QStringLiteral("MiniPOS"));
 
     try
     {
-        const QString dataDirectory =
-            QStandardPaths::writableLocation(
-                QStandardPaths::AppDataLocation);
+        const QString dataDirectory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 
-        if (dataDirectory.isEmpty() ||
-            !QDir{}.mkpath(dataDirectory))
+        if (dataDirectory.isEmpty() || !QDir{}.mkpath(dataDirectory))
         {
-            throw std::runtime_error(
-                "Cannot create application data directory");
+            throw std::runtime_error("Cannot create application data directory");
         }
 
-        const QString databasePath =
-            dataDirectory +
-            QStringLiteral("/mini_pos.sqlite");
+        const QString databasePath = dataDirectory + QStringLiteral("/mini_pos.sqlite");
 
         pos::infrastructure::SqliteDatabase database(databasePath);
 
-        pos::infrastructure::SqliteReceiptRepository
-            receiptRepository(
-                database.connectionName());
+        pos::infrastructure::SqliteReceiptRepository receiptRepository(database.connectionName());
 
-        pos::ProductCatalog catalog =
-            pos::infrastructure::
-                makeDemoProductCatalog();
+        pos::ProductCatalog catalog = pos::infrastructure::makeDemoProductCatalog();
 
         pos::Sale currentSale;
 
-        MainWindow window(
-            catalog,
-            currentSale,
-            receiptRepository);
-
+        MainWindow window(catalog, currentSale, receiptRepository, receiptRepository);
         window.show();
 
         return application.exec();

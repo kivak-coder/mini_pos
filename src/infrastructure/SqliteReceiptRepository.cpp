@@ -11,14 +11,9 @@
 namespace
 {
 
-std::runtime_error queryError(
-    const QString& context,
-    const QSqlError& error)
+std::runtime_error queryError(const QString& context, const QSqlError& error)
 {
-    return std::runtime_error(
-        QStringLiteral("%1: %2")
-            .arg(context, error.text())
-            .toStdString());
+    return std::runtime_error(QStringLiteral("%1: %2").arg(context, error.text()).toStdString());
 }
 
 }
@@ -26,30 +21,20 @@ std::runtime_error queryError(
 namespace pos::infrastructure
 {
 
-SqliteReceiptRepository::SqliteReceiptRepository(
-    QString connectionName)
-    : connectionName_(std::move(connectionName))
-{
-}
+SqliteReceiptRepository::SqliteReceiptRepository(QString connectionName) : connectionName_(std::move(connectionName)) {}
 
-ReceiptId SqliteReceiptRepository::save(
-    const Receipt& receipt)
+ReceiptId SqliteReceiptRepository::save(const Receipt& receipt)
 {
-    QSqlDatabase database =
-        QSqlDatabase::database(connectionName_);
+    QSqlDatabase database = QSqlDatabase::database(connectionName_);
 
     if (!database.isValid() || !database.isOpen())
     {
-        throw std::runtime_error(
-            "SQLite database is not open");
+        throw std::runtime_error("SQLite database is not open");
     }
 
     if (!database.transaction())
     {
-        throw queryError(
-            QStringLiteral(
-                "Cannot start database transaction"),
-            database.lastError());
+        throw queryError(QStringLiteral("Cannot start database transaction"), database.lastError());
     }
 
     try
@@ -71,45 +56,27 @@ ReceiptId SqliteReceiptRepository::save(
             )
         )SQL"));
 
-        receiptQuery.bindValue(
-            QStringLiteral(":created_at"),
-            static_cast<qlonglong>(
-                receipt.createdAtUnixSeconds()));
+        receiptQuery.bindValue(QStringLiteral(":created_at"), static_cast<qlonglong>(receipt.createdAtUnixSeconds()));
 
-        receiptQuery.bindValue(
-            QStringLiteral(":total"),
-            static_cast<qlonglong>(
-                receipt.total()));
+        receiptQuery.bindValue(QStringLiteral(":total"), static_cast<qlonglong>(receipt.total()));
 
-        receiptQuery.bindValue(
-            QStringLiteral(":received"),
-            static_cast<qlonglong>(
-                receipt.received()));
+        receiptQuery.bindValue(QStringLiteral(":received"), static_cast<qlonglong>(receipt.received()));
 
-        receiptQuery.bindValue(
-            QStringLiteral(":change"),
-            static_cast<qlonglong>(
-                receipt.change()));
+        receiptQuery.bindValue(QStringLiteral(":change"), static_cast<qlonglong>(receipt.change()));
 
         if (!receiptQuery.exec())
         {
             throw queryError(
-                QStringLiteral(
-                    "Cannot insert receipt"),
-                receiptQuery.lastError());
+                QStringLiteral("Cannot insert receipt"), receiptQuery.lastError());
         }
 
         bool receiptIdIsValid = false;
 
-        const qlonglong receiptId =
-            receiptQuery
-                .lastInsertId()
-                .toLongLong(&receiptIdIsValid);
+        const qlonglong receiptId = receiptQuery.lastInsertId().toLongLong(&receiptIdIsValid);
 
         if (!receiptIdIsValid || receiptId <= 0)
         {
-            throw std::runtime_error(
-                "SQLite returned invalid receipt id");
+            throw std::runtime_error("SQLite returned invalid receipt id");
         }
 
         QSqlQuery itemQuery(database);
@@ -137,47 +104,25 @@ ReceiptId SqliteReceiptRepository::save(
 
         int lineNumber = 0;
 
-        for (const ReceiptItem& item :
-             receipt.items())
+        for (const ReceiptItem& item : receipt.items())
         {
-            itemQuery.bindValue(
-                QStringLiteral(":receipt_id"),
-                receiptId);
+            itemQuery.bindValue(QStringLiteral(":receipt_id"), receiptId);
 
-            itemQuery.bindValue(
-                QStringLiteral(":line_number"),
-                lineNumber);
+            itemQuery.bindValue(QStringLiteral(":line_number"), lineNumber);
 
-            itemQuery.bindValue(
-                QStringLiteral(":product_id"),
-                static_cast<qlonglong>(
-                    item.productId()));
+            itemQuery.bindValue(QStringLiteral(":product_id"), static_cast<qlonglong>(item.productId()));
 
-            itemQuery.bindValue(
-                QStringLiteral(":product_name"),
-                QString::fromUtf8(
-                    item.productName().c_str()));
+            itemQuery.bindValue(QStringLiteral(":product_name"), QString::fromUtf8(item.productName().c_str()));
 
-            itemQuery.bindValue(
-                QStringLiteral(":unit_price"),
-                static_cast<qlonglong>(
-                    item.unitPrice()));
+            itemQuery.bindValue(QStringLiteral(":unit_price"), static_cast<qlonglong>(item.unitPrice()));
 
-            itemQuery.bindValue(
-                QStringLiteral(":quantity"),
-                item.quantity());
+            itemQuery.bindValue(QStringLiteral(":quantity"), item.quantity());
 
-            itemQuery.bindValue(
-                QStringLiteral(":line_total"),
-                static_cast<qlonglong>(
-                    item.lineTotal()));
+            itemQuery.bindValue(QStringLiteral(":line_total"), static_cast<qlonglong>(item.lineTotal()));
 
             if (!itemQuery.exec())
             {
-                throw queryError(
-                    QStringLiteral(
-                        "Cannot insert receipt item"),
-                    itemQuery.lastError());
+                throw queryError(QStringLiteral("Cannot insert receipt item"), itemQuery.lastError());
             }
 
             ++lineNumber;
@@ -185,10 +130,7 @@ ReceiptId SqliteReceiptRepository::save(
 
         if (!database.commit())
         {
-            throw queryError(
-                QStringLiteral(
-                    "Cannot commit receipt transaction"),
-                database.lastError());
+            throw queryError(QStringLiteral("Cannot commit receipt transaction"), database.lastError());
         }
 
         return static_cast<ReceiptId>(receiptId);
@@ -198,6 +140,58 @@ ReceiptId SqliteReceiptRepository::save(
         database.rollback();
         throw;
     }
+}
+
+std::vector<pos::application::ReceiptSummary>
+pos::infrastructure::SqliteReceiptRepository::findAll() const
+{
+    QSqlDatabase database =
+        QSqlDatabase::database(
+            connectionName_,
+            false);
+
+    if (!database.isValid()) {
+        throw std::runtime_error(
+            "Database connection is invalid");
+    }
+
+    if (!database.isOpen()) {
+        throw std::runtime_error(
+            "Database connection is closed");
+    }
+
+    QSqlQuery query(database);
+
+    if (!query.exec(
+            "SELECT "
+            "id, "
+            "created_at, "
+            "total_kopecks, "
+            "received_kopecks, "
+            "change_kopecks "
+            "FROM receipts "
+            "ORDER BY id DESC")) {
+        throw std::runtime_error(query.lastError().text().toStdString());
+    }
+
+    std::vector<
+        application::ReceiptSummary> receipts;
+
+    while (query.next()) {
+        receipts.push_back(
+            application::ReceiptSummary{static_cast<ReceiptId>(
+                query.value(0).toLongLong()),
+                query.value(1).toLongLong(),
+                static_cast<Money>(
+                    query.value(2).toLongLong()),
+                static_cast<Money>(
+                    query.value(3).toLongLong()),
+                static_cast<Money>(
+                    query.value(4).toLongLong())
+            });
+    }
+
+    return receipts;
 }
 
 }
