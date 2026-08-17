@@ -3,6 +3,8 @@
 #include "domain/ProductCatalog.h"
 #include "domain/Sale.h"
 #include "application/CashPaymentService.h"
+#include "application/CheckoutService.h"
+#include "application/ReceiptRepository.h"
 
 #include <QMainWindow>
 
@@ -19,9 +21,11 @@ class MainWindow final : public QMainWindow
 
 public:
     explicit MainWindow(
-        const pos::ProductCatalog& catalog,
-        pos::Sale& sale,
-        QWidget* parent = nullptr);
+    const pos::ProductCatalog& catalog,
+    pos::Sale& sale,
+    pos::application::ReceiptRepository&
+        receiptRepository,
+    QWidget* parent = nullptr);
 
 private:
     void buildUi();
@@ -51,6 +55,9 @@ private:
 
     QLabel* totalLabel_ = nullptr;
     pos::application::CashPaymentService paymentService_;
+
+
+    pos::application::CheckoutService checkoutService_;
 
     QPushButton* paymentButton_ = nullptr;
 };

@@ -4,6 +4,8 @@
 #include "ui/MoneyFormatter.h"
 #include "ui/ProductTableModel.h"
 #include "ui/PaymentDialog.h"
+#include "application/CheckoutService.h"
+
 
 #include <QAbstractItemView>
 #include <QHBoxLayout>
@@ -20,10 +22,16 @@
 MainWindow::MainWindow(
     const pos::ProductCatalog& catalog,
     pos::Sale& sale,
+    pos::application::ReceiptRepository&
+        receiptRepository,
     QWidget* parent)
     : QMainWindow(parent),
       catalog_(catalog),
-      sale_(sale)
+      sale_(sale),
+      paymentService_(),
+      checkoutService_(
+          paymentService_,
+          receiptRepository)
 {
     productModel_ = new ProductTableModel(catalog_, this);
     cartModel_ = new CartTableModel(sale_, this);
@@ -300,13 +308,60 @@ void MainWindow::payCurrentSale()
             .arg(pos::ui::formatMoney(result.received))
             .arg(pos::ui::formatMoney(result.change)));
 
-    sale_.clear();
+    try
+    {
+        const auto checkout =
+            checkoutService_.complete(
+                sale_,
+                dialog.result().received);
 
-    cartModel_->refresh();
-    cartTable_->clearSelection();
+        if (!checkout.successful())
+        {
+            QMessageBox::warning(
+                this,
+                tr("Оплата не завершена"),
+                tr("Не удалось завершить продажу."));
+            return;
+        }
 
-    cartQuantitySpinBox_->setValue(1);
-    addQuantitySpinBox_->setValue(1);
+        QMessageBox::information(
+            this,
+            tr("Оплата принята"),
+            tr(
+                "Чек №%1 успешно сохранён.\n"
+                "Сумма: %2\n"
+                "Получено: %3\n"
+                "Сдача: %4")
+                .arg(static_cast<qlonglong>(checkout.receiptId))
+                .arg(pos::ui::formatMoney(checkout.payment.total))
+                .arg(pos::ui::formatMoney(checkout.payment.received))
+                .arg(pos::ui::formatMoney(checkout.payment.change))
+        );
 
-    updateTotal();
+        cartModel_->refresh();
+        cartTable_->clearSelection();
+
+        cartQuantitySpinBox_->setValue(1);
+        addQuantitySpinBox_->setValue(1);
+
+        updateTotal();
+    }
+    catch (const std::exception& error)
+    {
+        QMessageBox::critical(
+            this,
+            tr("Ошибка базы данных"),
+            tr(
+                "Не удалось сохранить чек.\n"
+                "Текущий чек не был очищен.\n\n%1")
+                .arg(QString::fromUtf8(error.what())));
+    }
+                
+    // cartModel_->refresh();
+    // cartTable_->clearSelection();
+
+    // cartQuantitySpinBox_->setValue(1);
+    // addQuantitySpinBox_->setValue(1);
+
+    // updateTotal();
 }

@@ -10,7 +10,6 @@ add_library(mini_pos_domain
     domain/Sale.cpp
     domain/Receipt.h
     domain/Receipt.cpp
-
 )
 
 target_include_directories(mini_pos_domain
@@ -45,13 +44,31 @@ if(MINGW)
 
 endif()
 
-
-add_executable(mini_pos
-    main.cpp
-
+add_library(mini_pos_infrastructure
     infrastructure/ProductCatalogDemo.h
     infrastructure/ProductCatalogDemo.cpp
     infrastructure/SqliteDatabase.h
+    infrastructure/SqliteDatabase.cpp
+    infrastructure/SqliteReceiptRepository.h
+    infrastructure/SqliteReceiptRepository.cpp
+)
+
+target_include_directories(mini_pos_infrastructure
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(mini_pos_infrastructure
+    PUBLIC
+        mini_pos_domain
+        mini_pos_application
+        Qt5::Core
+        Qt5::Sql
+)
+
+
+add_executable(mini_pos
+    main.cpp
 
     ui/MoneyFormatter.h
     ui/MoneyFormatter.cpp
@@ -63,14 +80,14 @@ add_executable(mini_pos
     ui/MainWindow.cpp
     ui/PaymentDialog.h
     ui/PaymentDialog.cpp
-    infrastructure/SqliteDatabase.cpp
-    infrastructure/SqliteReceiptRepository.h
-    infrastructure/SqliteReceiptRepository.cpp
+
 )
 
 target_link_libraries(mini_pos
     PRIVATE
         mini_pos_domain
+        mini_pos_application
+        mini_pos_infrastructure
         Qt5::Widgets
         Qt5::Sql
 )

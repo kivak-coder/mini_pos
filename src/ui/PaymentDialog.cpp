@@ -10,9 +10,6 @@
 #include <QRegularExpression>
 #include <QStringList>
 #include <optional>
-#include "application/CashPaymentService.h"
-
-
 
 namespace {
 
